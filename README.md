@@ -39,7 +39,7 @@ This repository can be useful for:
 
 ```
 HackVeda-Internship/
-├── TASK 1 -- SIEM Configuration for Real-Time Threat Alerts/
+├── task-1-siem-threat-alerts/
 │   └── README.md
 └── README.md
 ```
