@@ -1,2 +1,42 @@
-### HackVeda Internship
-- I am doing an internship at 'HackVeda', A company known for IT related solutions, I am writing down all whatever I am doing and whever I am learning. Hope this repo helps someone in their work too!!!
+# HackVeda Internship
+
+This repository documents my journey during my internship at HackVeda, where I worked on practical IT and cybersecurity concepts.
+
+## About
+
+During this internship, I explored and practiced:
+
+* Cybersecurity fundamentals
+* Linux systems and command-line usage
+* Networking concepts
+* Security tools and techniques
+* Hands-on labs and exercises
+
+This repository serves as both a learning journal and a reference for anyone interested in cybersecurity.
+
+## Contents
+
+* Daily and weekly notes
+* Hands-on labs and experiments
+* Commands, scripts, and configurations
+* Explanations of key security concepts
+
+## Goal
+
+The goal of this repository is to build a strong foundation in cybersecurity while documenting my learning process in a structured way.
+
+## Why This Repository
+
+This repository can be useful for:
+
+* Beginners starting in cybersecurity
+* Learners looking for structured notes
+* Anyone interested in practical, hands-on understanding
+
+## Repository Structure
+
+(Add your folder structure here once your repo grows)
+
+## Contributions
+
+Feel free to explore, fork, or suggest improvements.
