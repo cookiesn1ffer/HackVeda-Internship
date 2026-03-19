@@ -35,7 +35,14 @@ This repository can be useful for:
 
 ## Repository Structure
 
-(Add your folder structure here once your repo grows)
+## Repository Structure
+
+```
+HackVeda-Internship/
+├── TASK 1 -- SIEM Configuration for Real-Time Threat Alerts/
+│   └── README.md
+└── README.md
+```
 
 ## Contributions
 
