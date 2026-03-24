@@ -4,14 +4,6 @@ This repository documents my journey during my internship at HackVeda, where I w
 
 ## About
 
-During this internship, I explored and practiced:
-
-* Cybersecurity fundamentals
-* Linux systems and command-line usage
-* Networking concepts
-* Security tools and techniques
-* Hands-on labs and exercises
-
 This repository serves as both a learning journal and a reference for anyone interested in cybersecurity.
 
 ## Contents
