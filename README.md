@@ -27,8 +27,6 @@ This repository can be useful for:
 
 ## Repository Structure
 
-## Repository Structure
-
 ```
 HackVeda-Internship/
 ├── task-1-siem-threat-alerts/
