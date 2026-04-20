@@ -1,0 +1,389 @@
+##############################################################################
+#  CUSTOM EDR — VELOCIRAPTOR ARTIFACT
+#  Name:    CustomEDR.Sysmon.Events
+#  Purpose: Query Sysmon events from Windows Event Log in a normalized,
+#           structured format suitable for the Python detection engine.
+#
+#  INSTALL:
+#    In the Velociraptor GUI:
+#      1. Go to View → Artifacts → Add Artifact
+#      2. Paste this entire file
+#      3. Click "Save"
+#
+#  USAGE (from GUI Shell or Python API):
+#    SELECT * FROM Artifact.CustomEDR.Sysmon.Events(
+#        EventIDs="1,3,10,11,12,13",
+#        MaxEvents=100,
+#        HoursBack=1
+#    )
+##############################################################################
+
+name: CustomEDR.Sysmon.Events
+description: |
+  Collect and normalize Sysmon events from the Windows Event Log.
+
+  Returns structured records for process creation, network connections,
+  registry events, file creation, process access, and more.
+
+  Designed to feed the Custom EDR Python detection engine.
+
+author: Custom EDR Project
+type: CLIENT
+
+parameters:
+  - name: EventIDs
+    description: |
+      Comma-separated list of Sysmon Event IDs to collect.
+      Common values:
+        1  = Process Creation
+        3  = Network Connection
+        5  = Process Terminated
+        8  = CreateRemoteThread (injection)
+        10 = ProcessAccess (LSASS access)
+        11 = FileCreate
+        12 = RegistryEvent (object create/delete)
+        13 = RegistryEvent (value set)
+        14 = RegistryEvent (key/value rename)
+        22 = DNS Query
+        25 = Process Tampering
+    default: "1,3,8,10,11,12,13,22,25"
+
+  - name: MaxEvents
+    description: Maximum number of events to return per query
+    default: "500"
+    type: int
+
+  - name: HoursBack
+    description: How many hours back to look for events (0 = all available)
+    default: "1"
+    type: int
+
+  - name: FilterKeyword
+    description: Optional string to filter events by (searches full message)
+    default: ""
+
+sources:
+  - name: ProcessCreation
+    description: "Event ID 1: Process Created"
+    query: |
+      -- Only run if EventID 1 is in the requested list
+      LET run_proc_create = EventIDs =~ "\\b1\\b"
+
+      LET raw_events = SELECT *
+      FROM if(
+        condition=run_proc_create,
+        then={
+          SELECT *
+          FROM watch_evtx(
+            filename="C:/Windows/System32/winevt/Logs/Microsoft-Windows-Sysmon%4Operational.evtx"
+          )
+          WHERE System.EventID.Value = 1
+            AND if(condition=HoursBack > 0,
+                   then=System.TimeCreated.SystemTime > now() - HoursBack * 3600,
+                   else=TRUE)
+            AND if(condition=FilterKeyword != "",
+                   then=Message =~ FilterKeyword,
+                   else=TRUE)
+          LIMIT MaxEvents
+        }
+      )
+
+      SELECT
+        System.TimeCreated.SystemTime         AS EventTime,
+        System.EventID.Value                  AS EventID,
+        "ProcessCreate"                       AS EventType,
+        EventData.ProcessGuid                 AS ProcessGUID,
+        EventData.ProcessId                   AS ProcessID,
+        EventData.Image                       AS Image,
+        EventData.FileVersion                 AS FileVersion,
+        EventData.Description                 AS Description,
+        EventData.Product                     AS Product,
+        EventData.Company                     AS Company,
+        EventData.OriginalFileName            AS OriginalFileName,
+        EventData.CommandLine                 AS CommandLine,
+        EventData.CurrentDirectory            AS CurrentDirectory,
+        EventData.User                        AS User,
+        EventData.LogonGuid                   AS LogonGuid,
+        EventData.LogonId                     AS LogonId,
+        EventData.TerminalSessionId           AS TerminalSessionId,
+        EventData.IntegrityLevel              AS IntegrityLevel,
+        EventData.Hashes                      AS Hashes,
+        EventData.ParentProcessGuid           AS ParentProcessGUID,
+        EventData.ParentProcessId             AS ParentProcessID,
+        EventData.ParentImage                 AS ParentImage,
+        EventData.ParentCommandLine           AS ParentCommandLine,
+        EventData.ParentUser                  AS ParentUser
+      FROM raw_events
+
+  - name: NetworkConnect
+    description: "Event ID 3: Network Connection"
+    query: |
+      LET run_network = EventIDs =~ "\\b3\\b"
+
+      LET raw_events = SELECT *
+      FROM if(
+        condition=run_network,
+        then={
+          SELECT *
+          FROM watch_evtx(
+            filename="C:/Windows/System32/winevt/Logs/Microsoft-Windows-Sysmon%4Operational.evtx"
+          )
+          WHERE System.EventID.Value = 3
+            AND if(condition=HoursBack > 0,
+                   then=System.TimeCreated.SystemTime > now() - HoursBack * 3600,
+                   else=TRUE)
+          LIMIT MaxEvents
+        }
+      )
+
+      SELECT
+        System.TimeCreated.SystemTime         AS EventTime,
+        System.EventID.Value                  AS EventID,
+        "NetworkConnect"                      AS EventType,
+        EventData.ProcessGuid                 AS ProcessGUID,
+        EventData.ProcessId                   AS ProcessID,
+        EventData.Image                       AS Image,
+        EventData.User                        AS User,
+        EventData.Protocol                    AS Protocol,
+        EventData.Initiated                   AS Initiated,
+        EventData.SourceIsIpv6                AS SourceIsIpv6,
+        EventData.SourceIp                    AS SourceIP,
+        EventData.SourceHostname              AS SourceHostname,
+        EventData.SourcePort                  AS SourcePort,
+        EventData.DestinationIsIpv6           AS DestinationIsIpv6,
+        EventData.DestinationIp               AS DestinationIP,
+        EventData.DestinationHostname         AS DestinationHostname,
+        EventData.DestinationPort             AS DestinationPort,
+        EventData.DestinationPortName         AS DestinationPortName
+      FROM raw_events
+
+  - name: ProcessAccess
+    description: "Event ID 10: Process Access (LSASS credential dumping)"
+    query: |
+      LET run_procaccess = EventIDs =~ "\\b10\\b"
+
+      LET raw_events = SELECT *
+      FROM if(
+        condition=run_procaccess,
+        then={
+          SELECT *
+          FROM watch_evtx(
+            filename="C:/Windows/System32/winevt/Logs/Microsoft-Windows-Sysmon%4Operational.evtx"
+          )
+          WHERE System.EventID.Value = 10
+            AND if(condition=HoursBack > 0,
+                   then=System.TimeCreated.SystemTime > now() - HoursBack * 3600,
+                   else=TRUE)
+          LIMIT MaxEvents
+        }
+      )
+
+      SELECT
+        System.TimeCreated.SystemTime         AS EventTime,
+        System.EventID.Value                  AS EventID,
+        "ProcessAccess"                       AS EventType,
+        EventData.SourceProcessGUID           AS SourceProcessGUID,
+        EventData.SourceProcessId             AS SourceProcessID,
+        EventData.SourceThreadId              AS SourceThreadID,
+        EventData.SourceImage                 AS SourceImage,
+        EventData.TargetProcessGUID           AS TargetProcessGUID,
+        EventData.TargetProcessId             AS TargetProcessID,
+        EventData.TargetImage                 AS TargetImage,
+        EventData.GrantedAccess               AS GrantedAccess,
+        EventData.CallTrace                   AS CallTrace
+      FROM raw_events
+
+  - name: RegistryEvents
+    description: "Event IDs 12/13/14: Registry Create/Set/Rename"
+    query: |
+      LET run_reg = EventIDs =~ "\\b1[234]\\b"
+
+      LET raw_events = SELECT *
+      FROM if(
+        condition=run_reg,
+        then={
+          SELECT *
+          FROM watch_evtx(
+            filename="C:/Windows/System32/winevt/Logs/Microsoft-Windows-Sysmon%4Operational.evtx"
+          )
+          WHERE System.EventID.Value IN (12, 13, 14)
+            AND if(condition=HoursBack > 0,
+                   then=System.TimeCreated.SystemTime > now() - HoursBack * 3600,
+                   else=TRUE)
+          LIMIT MaxEvents
+        }
+      )
+
+      SELECT
+        System.TimeCreated.SystemTime         AS EventTime,
+        System.EventID.Value                  AS EventID,
+        if(condition=System.EventID.Value=12, then="RegistryCreateDelete",
+           if(condition=System.EventID.Value=13, then="RegistryValueSet",
+              else="RegistryRename"))          AS EventType,
+        EventData.EventType                   AS RegistryEventType,
+        EventData.ProcessGuid                 AS ProcessGUID,
+        EventData.ProcessId                   AS ProcessID,
+        EventData.Image                       AS Image,
+        EventData.TargetObject                AS TargetObject,
+        EventData.Details                     AS Details,
+        EventData.NewName                     AS NewName
+      FROM raw_events
+
+  - name: FileCreate
+    description: "Event ID 11: File Created"
+    query: |
+      LET run_file = EventIDs =~ "\\b11\\b"
+
+      LET raw_events = SELECT *
+      FROM if(
+        condition=run_file,
+        then={
+          SELECT *
+          FROM watch_evtx(
+            filename="C:/Windows/System32/winevt/Logs/Microsoft-Windows-Sysmon%4Operational.evtx"
+          )
+          WHERE System.EventID.Value = 11
+            AND if(condition=HoursBack > 0,
+                   then=System.TimeCreated.SystemTime > now() - HoursBack * 3600,
+                   else=TRUE)
+          LIMIT MaxEvents
+        }
+      )
+
+      SELECT
+        System.TimeCreated.SystemTime         AS EventTime,
+        System.EventID.Value                  AS EventID,
+        "FileCreate"                          AS EventType,
+        EventData.ProcessGuid                 AS ProcessGUID,
+        EventData.ProcessId                   AS ProcessID,
+        EventData.Image                       AS Image,
+        EventData.TargetFilename              AS TargetFilename,
+        EventData.CreationUtcTime             AS CreationUtcTime,
+        EventData.Hashes                      AS Hashes,
+        EventData.User                        AS User
+      FROM raw_events
+
+  - name: DnsQuery
+    description: "Event ID 22: DNS Query"
+    query: |
+      LET run_dns = EventIDs =~ "\\b22\\b"
+
+      LET raw_events = SELECT *
+      FROM if(
+        condition=run_dns,
+        then={
+          SELECT *
+          FROM watch_evtx(
+            filename="C:/Windows/System32/winevt/Logs/Microsoft-Windows-Sysmon%4Operational.evtx"
+          )
+          WHERE System.EventID.Value = 22
+            AND if(condition=HoursBack > 0,
+                   then=System.TimeCreated.SystemTime > now() - HoursBack * 3600,
+                   else=TRUE)
+          LIMIT MaxEvents
+        }
+      )
+
+      SELECT
+        System.TimeCreated.SystemTime         AS EventTime,
+        System.EventID.Value                  AS EventID,
+        "DnsQuery"                            AS EventType,
+        EventData.ProcessGuid                 AS ProcessGUID,
+        EventData.ProcessId                   AS ProcessID,
+        EventData.Image                       AS Image,
+        EventData.QueryName                   AS QueryName,
+        EventData.QueryStatus                 AS QueryStatus,
+        EventData.QueryResults                AS QueryResults,
+        EventData.User                        AS User
+      FROM raw_events
+
+  - name: RemoteThread
+    description: "Event ID 8: CreateRemoteThread (process injection)"
+    query: |
+      LET run_rt = EventIDs =~ "\\b8\\b"
+
+      LET raw_events = SELECT *
+      FROM if(
+        condition=run_rt,
+        then={
+          SELECT *
+          FROM watch_evtx(
+            filename="C:/Windows/System32/winevt/Logs/Microsoft-Windows-Sysmon%4Operational.evtx"
+          )
+          WHERE System.EventID.Value = 8
+            AND if(condition=HoursBack > 0,
+                   then=System.TimeCreated.SystemTime > now() - HoursBack * 3600,
+                   else=TRUE)
+          LIMIT MaxEvents
+        }
+      )
+
+      SELECT
+        System.TimeCreated.SystemTime         AS EventTime,
+        System.EventID.Value                  AS EventID,
+        "CreateRemoteThread"                  AS EventType,
+        EventData.SourceProcessGuid           AS SourceProcessGUID,
+        EventData.SourceProcessId             AS SourceProcessID,
+        EventData.SourceImage                 AS SourceImage,
+        EventData.TargetProcessGuid           AS TargetProcessGUID,
+        EventData.TargetProcessId             AS TargetProcessID,
+        EventData.TargetImage                 AS TargetImage,
+        EventData.NewThreadId                 AS NewThreadID,
+        EventData.StartAddress                AS StartAddress,
+        EventData.StartModule                 AS StartModule,
+        EventData.StartFunction               AS StartFunction
+      FROM raw_events
+
+  - name: ProcessTampering
+    description: "Event ID 25: Process Tampering (hollowing, herpaderping)"
+    query: |
+      LET run_pt = EventIDs =~ "\\b25\\b"
+
+      LET raw_events = SELECT *
+      FROM if(
+        condition=run_pt,
+        then={
+          SELECT *
+          FROM watch_evtx(
+            filename="C:/Windows/System32/winevt/Logs/Microsoft-Windows-Sysmon%4Operational.evtx"
+          )
+          WHERE System.EventID.Value = 25
+            AND if(condition=HoursBack > 0,
+                   then=System.TimeCreated.SystemTime > now() - HoursBack * 3600,
+                   else=TRUE)
+          LIMIT MaxEvents
+        }
+      )
+
+      SELECT
+        System.TimeCreated.SystemTime         AS EventTime,
+        System.EventID.Value                  AS EventID,
+        "ProcessTampering"                    AS EventType,
+        EventData.ProcessGuid                 AS ProcessGUID,
+        EventData.ProcessId                   AS ProcessID,
+        EventData.Image                       AS Image,
+        EventData.Type                        AS TamperingType
+      FROM raw_events
+
+# ─── EXAMPLE QUERIES TO RUN FROM VELOCIRAPTOR GUI ─────────────────────────────
+#
+# 1. Get all suspicious PowerShell executions from the last hour:
+#    SELECT EventTime, Image, CommandLine, User, ParentImage
+#    FROM Artifact.CustomEDR.Sysmon.Events(EventIDs="1", HoursBack=1)
+#    WHERE CommandLine =~ "-[Ee]nc" OR CommandLine =~ "-[Ee]ncodedcommand"
+#       OR CommandLine =~ "-[Nn]op" OR CommandLine =~ "-[Hh]idden"
+#
+# 2. Get all LSASS access events:
+#    SELECT * FROM Artifact.CustomEDR.Sysmon.Events(EventIDs="10", HoursBack=24)
+#    WHERE TargetImage =~ "lsass.exe"
+#
+# 3. Get all network connections from PowerShell:
+#    SELECT EventTime, Image, DestinationIP, DestinationPort, User
+#    FROM Artifact.CustomEDR.Sysmon.Events(EventIDs="3", HoursBack=1)
+#    WHERE Image =~ "powershell.exe"
+#
+# 4. Get registry persistence events:
+#    SELECT EventTime, Image, TargetObject, Details
+#    FROM Artifact.CustomEDR.Sysmon.Events(EventIDs="12,13", HoursBack=24)
+#    WHERE TargetObject =~ "\\\\Run\\\\" OR TargetObject =~ "\\\\RunOnce\\\\"
+# ──────────────────────────────────────────────────────────────────────────────

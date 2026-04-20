@@ -1,0 +1,59 @@
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+*.spec
+
+# ─── Virtual environments ────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+.env/
+ENV/
+
+# ─── EDR runtime output ──────────────────────────────────────────────────────
+logs/
+*.jsonl
+*.log
+
+# ─── Secrets / credentials ───────────────────────────────────────────────────
+# Never commit API keys or webhook URLs
+# The webhook URL in config.yaml should stay blank — add locally only
+*.key
+*.pem
+*.p12
+api_client.yaml
+velociraptor*.yaml
+
+# ─── IDE / editor ────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ─── Testing artifacts ───────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+*.test.py
+
+# ─── Windows artifacts ───────────────────────────────────────────────────────
+desktop.ini
+$RECYCLE.BIN/
+
+# ─── Large binaries (Sysmon exe must not be in git) ────────────────────────
+# Download Sysmon from https://docs.microsoft.com/sysinternals/downloads/sysmon
+Sysmon/*.exe
+Sysmon/Eula.txt
+
+# Don't ignore Python scripts (*.py) — but do ignore compiled bytecode (above)
+# Don't ignore PowerShell scripts (*.ps1)

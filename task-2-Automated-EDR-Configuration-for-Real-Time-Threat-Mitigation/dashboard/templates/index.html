@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Custom EDR — Dashboard</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg-dark: #0a0e1a;
+      --bg-card: #111827;
+      --bg-card2: #1a2235;
+      --accent: #00d4ff;
+      --accent2: #7c3aed;
+      --text-primary: #e2e8f0;
+      --text-muted: #64748b;
+      --critical: #dc2626;
+      --high: #ef4444;
+      --medium: #f59e0b;
+      --low: #3b82f6;
+      --info: #6b7280;
+      --success: #10b981;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background: var(--bg-dark);
+      color: var(--text-primary);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      margin: 0;
+      min-height: 100vh;
+    }
+
+    /* ── NAVBAR ─────────────────────────────────────────────────────────── */
+    .navbar {
+      background: linear-gradient(135deg, #0a0e1a 0%, #111827 100%);
+      border-bottom: 1px solid rgba(0, 212, 255, 0.15);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+    }
+
+    .navbar-brand {
+      font-size: 1.4rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #00d4ff, #7c3aed);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-decoration: none;
+      letter-spacing: 0.5px;
+    }
+
+    .status-badge {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .status-running { background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; }
+    .status-stopped { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; }
+
+    .refresh-indicator {
+      margin-left: auto;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .pulse {
+      display: inline-block;
+      width: 8px; height: 8px;
+      background: var(--success);
+      border-radius: 50%;
+      margin-right: 6px;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(16,185,129,0.7); }
+      50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(16,185,129,0); }
+    }
+
+    /* ── LAYOUT ─────────────────────────────────────────────────────────── */
+    .main-container {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    /* ── METRIC CARDS ───────────────────────────────────────────────────── */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .metric-card {
+      background: var(--bg-card);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+    }
+
+    .metric-card:hover { border-color: rgba(0,212,255,0.3); }
+
+    .metric-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .metric-value {
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .metric-sub {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .metric-critical .metric-value { color: var(--critical); }
+    .metric-high .metric-value { color: var(--high); }
+    .metric-accent .metric-value { color: var(--accent); }
+    .metric-success .metric-value { color: var(--success); }
+
+    /* ── CHARTS ─────────────────────────────────────────────────────────── */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 1200px) {
+      .charts-row { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 768px) {
+      .charts-row { grid-template-columns: 1fr; }
+    }
+
+    .chart-card {
+      background: var(--bg-card);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .chart-title {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      font-weight: 600;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 200px;
+    }
+
+    /* ── ALERT TABLE ─────────────────────────────────────────────────────── */
+    .alert-section {
+      background: var(--bg-card);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+
+    .section-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-card2);
+    }
+
+    .section-title {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .alert-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .alert-table th {
+      padding: 10px 16px;
+      text-align: left;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      background: var(--bg-card2);
+      font-weight: 600;
+    }
+
+    .alert-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 0.82rem;
+      vertical-align: middle;
+    }
+
+    .alert-table tr:hover td { background: rgba(255,255,255,0.03); }
+    .alert-table tr:last-child td { border-bottom: none; }
+
+    /* ── SEVERITY BADGES ─────────────────────────────────────────────────── */
+    .sev-badge {
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+
+    .sev-CRITICAL { background: rgba(220,38,38,0.2); color: #f87171; border: 1px solid rgba(220,38,38,0.4); }
+    .sev-HIGH     { background: rgba(239,68,68,0.15); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
+    .sev-MEDIUM   { background: rgba(245,158,11,0.15); color: #fcd34d; border: 1px solid rgba(245,158,11,0.3); }
+    .sev-LOW      { background: rgba(59,130,246,0.15); color: #93c5fd; border: 1px solid rgba(59,130,246,0.3); }
+    .sev-INFO     { background: rgba(107,114,128,0.15); color: #9ca3af; border: 1px solid rgba(107,114,128,0.3); }
+
+    /* ── MITRE BADGE ─────────────────────────────────────────────────────── */
+    .mitre-badge {
+      background: rgba(124,58,237,0.15);
+      color: #c4b5fd;
+      border: 1px solid rgba(124,58,237,0.3);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      font-family: monospace;
+    }
+
+    /* ── RULES PANEL ─────────────────────────────────────────────────────── */
+    .rules-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 10px;
+      padding: 16px;
+    }
+
+    .rule-item {
+      background: var(--bg-card2);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .rule-id-badge {
+      background: rgba(0,212,255,0.1);
+      color: var(--accent);
+      border: 1px solid rgba(0,212,255,0.2);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      font-family: monospace;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .rule-name {
+      font-size: 0.78rem;
+      flex: 1;
+    }
+
+    /* ── EMPTY STATE ─────────────────────────────────────────────────────── */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+    }
+
+    .empty-icon {
+      font-size: 3rem;
+      margin-bottom: 12px;
+      opacity: 0.4;
+    }
+
+    /* ── COMMAND LINE PREVIEW ────────────────────────────────────────────── */
+    .cmd-preview {
+      font-family: 'Courier New', monospace;
+      font-size: 0.72rem;
+      color: #94a3b8;
+      max-width: 300px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* ── SCROLLBAR ───────────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-dark); }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+    /* ── ANIMATIONS ──────────────────────────────────────────────────────── */
+    .new-alert {
+      animation: alertIn 0.5s ease;
+    }
+
+    @keyframes alertIn {
+      from { opacity: 0; transform: translateX(-10px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <a href="/" class="navbar-brand">🛡️ Custom EDR</a>
+  <span id="status-badge" class="status-badge status-stopped">● STOPPED</span>
+  <span class="refresh-indicator" id="refresh-indicator">
+    <span class="pulse"></span>
+    <span id="refresh-label">Connecting…</span>
+  </span>
+</nav>
+
+<!-- MAIN CONTENT -->
+<div class="main-container">
+
+  <!-- METRIC CARDS -->
+  <div class="metric-grid">
+    <div class="metric-card metric-accent">
+      <div class="metric-label">Events Processed</div>
+      <div class="metric-value" id="events-count">0</div>
+      <div class="metric-sub">since startup</div>
+    </div>
+    <div class="metric-card metric-critical">
+      <div class="metric-label">Alerts Fired</div>
+      <div class="metric-value" id="alerts-count">0</div>
+      <div class="metric-sub">detections triggered</div>
+    </div>
+    <div class="metric-card metric-high">
+      <div class="metric-label">Responses Taken</div>
+      <div class="metric-value" id="responses-count">0</div>
+      <div class="metric-sub">automated actions</div>
+    </div>
+    <div class="metric-card metric-success">
+      <div class="metric-label">Rules Loaded</div>
+      <div class="metric-value" id="rules-count">0</div>
+      <div class="metric-sub">detection rules active</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Uptime</div>
+      <div class="metric-value" id="uptime-val" style="font-size: 1.4rem;">0s</div>
+      <div class="metric-sub" id="start-time">—</div>
+    </div>
+  </div>
+
+  <!-- CHARTS ROW -->
+  <div class="charts-row">
+    <!-- Severity Distribution -->
+    <div class="chart-card">
+      <div class="chart-title">Alert Severity Distribution</div>
+      <div class="chart-container">
+        <canvas id="severity-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- MITRE Tactic Breakdown -->
+    <div class="chart-card">
+      <div class="chart-title">MITRE ATT&CK Tactics</div>
+      <div class="chart-container">
+        <canvas id="tactic-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Event Types -->
+    <div class="chart-card">
+      <div class="chart-title">Event Types Processed</div>
+      <div class="chart-container">
+        <canvas id="events-chart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ALERT FEED -->
+  <div class="alert-section">
+    <div class="section-header">
+      <h2 class="section-title">🚨 Live Alert Feed</h2>
+      <span id="alert-total" style="font-size:0.75rem; color: var(--text-muted);">0 total</span>
+    </div>
+    <div id="alerts-container">
+      <div class="empty-state">
+        <div class="empty-icon">🔍</div>
+        <div>No alerts yet — engine is monitoring</div>
+        <div style="font-size:0.75rem; margin-top:8px;">Run the attack simulations in test_scenarios/ to see detections</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOADED RULES -->
+  <div class="alert-section">
+    <div class="section-header">
+      <h2 class="section-title">📋 Loaded Detection Rules</h2>
+      <span id="rules-total" style="font-size:0.75rem; color: var(--text-muted);">0 rules</span>
+    </div>
+    <div id="rules-container" class="rules-grid"></div>
+  </div>
+
+</div>
+
+<script>
+// ── CHART SETUP ────────────────────────────────────────────────────────────
+
+Chart.defaults.color = '#64748b';
+Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
+
+const chartDefaults = {
+  plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+  animation: { duration: 300 },
+};
+
+const severityColors = {
+  'CRITICAL': '#dc2626',
+  'HIGH': '#ef4444',
+  'MEDIUM': '#f59e0b',
+  'LOW': '#3b82f6',
+  'INFO': '#6b7280',
+};
+
+let severityChart, tacticChart, eventsChart;
+
+function initCharts() {
+  const severityCtx = document.getElementById('severity-chart').getContext('2d');
+  severityChart = new Chart(severityCtx, {
+    type: 'doughnut',
+    data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderWidth: 0 }] },
+    options: {
+      ...chartDefaults,
+      cutout: '65%',
+      plugins: {
+        legend: { position: 'right', labels: { color: '#94a3b8', font: { size: 11 }, padding: 12 } }
+      },
+    }
+  });
+
+  const tacticCtx = document.getElementById('tactic-chart').getContext('2d');
+  tacticChart = new Chart(tacticCtx, {
+    type: 'bar',
+    data: { labels: [], datasets: [{
+      data: [],
+      backgroundColor: 'rgba(124,58,237,0.6)',
+      borderColor: '#7c3aed',
+      borderWidth: 1,
+      borderRadius: 4,
+    }]},
+    options: {
+      ...chartDefaults,
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.04)' } },
+        y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { display: false } },
+      },
+    }
+  });
+
+  const eventsCtx = document.getElementById('events-chart').getContext('2d');
+  eventsChart = new Chart(eventsCtx, {
+    type: 'bar',
+    data: { labels: [], datasets: [{
+      data: [],
+      backgroundColor: 'rgba(0,212,255,0.5)',
+      borderColor: '#00d4ff',
+      borderWidth: 1,
+      borderRadius: 4,
+    }]},
+    options: {
+      ...chartDefaults,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#64748b', maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.04)' } },
+        y: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.04)' } },
+      },
+    }
+  });
+}
+
+function updateChart(chart, labels, data, colors = null) {
+  chart.data.labels = labels;
+  chart.data.datasets[0].data = data;
+  if (colors) chart.data.datasets[0].backgroundColor = colors;
+  chart.update('none');
+}
+
+// ── DATA FETCHING ──────────────────────────────────────────────────────────
+
+async function fetchStatus() {
+  const r = await fetch('/api/status').catch(() => null);
+  if (!r || !r.ok) return;
+  const data = await r.json();
+
+  document.getElementById('events-count').textContent = data.events_processed?.toLocaleString() || '0';
+  document.getElementById('alerts-count').textContent = data.alerts_fired?.toLocaleString() || '0';
+  document.getElementById('responses-count').textContent = data.responses_taken?.toLocaleString() || '0';
+  document.getElementById('rules-count').textContent = data.rule_count || '0';
+
+  const uptime = data.uptime_seconds || 0;
+  document.getElementById('uptime-val').textContent = formatUptime(uptime);
+  if (data.start_time) {
+    document.getElementById('start-time').textContent =
+      'since ' + new Date(data.start_time).toLocaleTimeString();
+  }
+
+  const badge = document.getElementById('status-badge');
+  if (data.status === 'running') {
+    badge.className = 'status-badge status-running';
+    badge.textContent = '● RUNNING';
+  } else {
+    badge.className = 'status-badge status-stopped';
+    badge.textContent = '● ' + (data.status || 'STOPPED').toUpperCase();
+  }
+
+  // Event types chart
+  if (data.events_by_type) {
+    const entries = Object.entries(data.events_by_type)
+      .sort((a, b) => b[1] - a[1]);
+    updateChart(eventsChart, entries.map(e => e[0]), entries.map(e => e[1]));
+  }
+}
+
+async function fetchAlerts() {
+  const r = await fetch('/api/alerts').catch(() => null);
+  if (!r || !r.ok) return;
+  const data = await r.json();
+  const alerts = data.alerts || [];
+
+  document.getElementById('alert-total').textContent = `${data.total} total`;
+
+  if (!alerts.length) return;
+
+  const container = document.getElementById('alerts-container');
+  const table = `
+    <table class="alert-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Severity</th>
+          <th>Rule</th>
+          <th>MITRE</th>
+          <th>Process / Details</th>
+          <th>Response</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${alerts.map(a => alertRow(a)).join('')}
+      </tbody>
+    </table>
+  `;
+  container.innerHTML = table;
+}
+
+function alertRow(a) {
+  const time = a.timestamp ? new Date(a.timestamp).toLocaleTimeString() : '—';
+  const sev = a.severity_label || 'INFO';
+  const mitre = a.mitre_technique_id || '';
+  const evt = a.event_details || {};
+  const process = evt.image ? evt.image.split('\\').pop() : (evt.source_image ? evt.source_image.split('\\').pop() : '—');
+  const cmd = evt.command_line ? evt.command_line.substring(0, 60) + (evt.command_line.length > 60 ? '…' : '') : '';
+  const response = a.response_taken || '—';
+
+  return `
+    <tr class="new-alert">
+      <td style="white-space:nowrap;color:var(--text-muted)">${time}</td>
+      <td><span class="sev-badge sev-${sev}">${sev}</span></td>
+      <td>
+        <div style="font-weight:600;font-size:0.8rem">${a.rule_name || '—'}</div>
+        <div style="font-size:0.7rem;color:var(--text-muted)">${a.rule_id || ''}</div>
+      </td>
+      <td>
+        ${mitre ? `<span class="mitre-badge">${mitre}</span>` : '—'}
+        <div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px">${a.mitre_tactic || ''}</div>
+      </td>
+      <td>
+        <div style="font-weight:500">${process}</div>
+        ${cmd ? `<div class="cmd-preview">${escapeHtml(cmd)}</div>` : ''}
+      </td>
+      <td style="font-size:0.75rem;color:${response !== '—' ? '#10b981' : 'var(--text-muted)'}">${escapeHtml(response)}</td>
+    </tr>
+  `;
+}
+
+async function fetchStats() {
+  const r = await fetch('/api/stats').catch(() => null);
+  if (!r || !r.ok) return;
+  const data = await r.json();
+
+  // Severity chart
+  if (data.by_severity) {
+    const sevOrder = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'];
+    const labels = [], values = [], colors = [];
+    sevOrder.forEach(s => {
+      if (data.by_severity[s]) {
+        labels.push(s);
+        values.push(data.by_severity[s]);
+        colors.push(severityColors[s]);
+      }
+    });
+    updateChart(severityChart, labels, values, colors);
+  }
+
+  // Tactic chart
+  if (data.by_tactic) {
+    const entries = Object.entries(data.by_tactic).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    updateChart(tacticChart, entries.map(e => e[0]), entries.map(e => e[1]));
+  }
+}
+
+async function fetchRules() {
+  const r = await fetch('/api/rules').catch(() => null);
+  if (!r || !r.ok) return;
+  const data = await r.json();
+  const rules = data.rules || [];
+
+  document.getElementById('rules-total').textContent = `${rules.length} rules`;
+
+  const container = document.getElementById('rules-container');
+  if (!rules.length) {
+    container.innerHTML = '<div class="empty-state"><div>No rules loaded</div></div>';
+    return;
+  }
+
+  const sevColors = { 10: '#dc2626', 9: '#ef4444', 8: '#f59e0b', 7: '#f59e0b', 6: '#3b82f6', 5: '#3b82f6' };
+
+  container.innerHTML = rules.map(r => `
+    <div class="rule-item">
+      <span class="rule-id-badge">${r.rule_id}</span>
+      <span class="rule-name">${r.rule_name}</span>
+      <span style="font-size:0.7rem;color:${sevColors[r.severity] || '#64748b'};font-weight:700;white-space:nowrap">
+        ${r.severity}/10
+      </span>
+    </div>
+  `).join('');
+}
+
+// ── HELPERS ────────────────────────────────────────────────────────────────
+
+function formatUptime(seconds) {
+  if (seconds < 60) return `${Math.floor(seconds)}s`;
+  if (seconds < 3600) return `${Math.floor(seconds/60)}m ${Math.floor(seconds%60)}s`;
+  const h = Math.floor(seconds/3600);
+  const m = Math.floor((seconds%3600)/60);
+  return `${h}h ${m}m`;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.appendChild(document.createTextNode(text));
+  return div.innerHTML;
+}
+
+// ── REAL-TIME UPDATE VIA SERVER-SENT EVENTS ───────────────────────────────
+
+let _knownAlertIds = new Set();
+let _sseConnected   = false;
+
+function applyUpdate(payload) {
+  // Status panel
+  if (payload.status) {
+    const s = payload.status;
+    document.getElementById('events-count').textContent    = (s.events_processed || 0).toLocaleString();
+    document.getElementById('alerts-count').textContent    = (s.alerts_fired     || 0).toLocaleString();
+    document.getElementById('responses-count').textContent = (s.responses_taken  || 0).toLocaleString();
+    document.getElementById('rules-count').textContent     = s.rule_count || '0';
+
+    const uptime = s.uptime_seconds || 0;
+    document.getElementById('uptime-val').textContent = formatUptime(uptime);
+    if (s.start_time) {
+      document.getElementById('start-time').textContent =
+        'since ' + new Date(s.start_time).toLocaleTimeString();
+    }
+
+    const badge = document.getElementById('status-badge');
+    if (s.status === 'running') {
+      badge.className   = 'status-badge status-running';
+      badge.textContent = '● RUNNING';
+    } else {
+      badge.className   = 'status-badge status-stopped';
+      badge.textContent = '● ' + (s.status || 'STOPPED').toUpperCase();
+    }
+
+    if (s.events_by_type) {
+      const entries = Object.entries(s.events_by_type).sort((a, b) => b[1] - a[1]);
+      updateChart(eventsChart, entries.map(e => e[0]), entries.map(e => e[1]));
+    }
+  }
+
+  // Alert feed — only add rows we haven't seen yet
+  if (payload.alerts && payload.alerts.length) {
+    document.getElementById('alert-total').textContent = `${payload.alerts.length} total`;
+
+    const container = document.getElementById('alerts-container');
+
+    // First time: render the full table
+    if (!_knownAlertIds.size) {
+      container.innerHTML = `
+        <table class="alert-table">
+          <thead>
+            <tr>
+              <th>Time</th><th>Severity</th><th>Rule</th>
+              <th>MITRE</th><th>Process / Details</th><th>Response</th>
+            </tr>
+          </thead>
+          <tbody id="alert-tbody"></tbody>
+        </table>`;
+    }
+
+    const tbody = document.getElementById('alert-tbody');
+    if (!tbody) return;
+
+    // Prepend only genuinely new alerts (newest first)
+    let added = 0;
+    payload.alerts.forEach(a => {
+      const id = a.rule_id + '|' + a.timestamp;
+      if (_knownAlertIds.has(id)) return;
+      _knownAlertIds.add(id);
+      const tr = document.createElement('tbody');
+      tr.innerHTML = alertRow(a);
+      const row = tr.firstElementChild;
+      row.classList.add('new-alert');
+      tbody.insertBefore(row, tbody.firstChild);
+      added++;
+    });
+
+    if (added > 0) {
+      // Flash the section header so the user notices
+      const header = document.querySelector('.alert-section .section-header');
+      header.style.transition = 'background 0.3s';
+      header.style.background = 'rgba(220,38,38,0.2)';
+      setTimeout(() => { header.style.background = ''; }, 600);
+    }
+  }
+
+  // Charts — severity + tactic
+  if (payload.stats) {
+    const data = payload.stats;
+    if (data.by_severity) {
+      const sevOrder = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'];
+      const labels = [], values = [], colors = [];
+      sevOrder.forEach(s => {
+        if (data.by_severity[s]) {
+          labels.push(s);
+          values.push(data.by_severity[s]);
+          colors.push(severityColors[s]);
+        }
+      });
+      updateChart(severityChart, labels, values, colors);
+    }
+    if (data.by_tactic) {
+      const entries = Object.entries(data.by_tactic).sort((a, b) => b[1] - a[1]).slice(0, 8);
+      updateChart(tacticChart, entries.map(e => e[0]), entries.map(e => e[1]));
+    }
+  }
+}
+
+function connectSSE() {
+  const label = document.getElementById('refresh-label');
+  const es = new EventSource('/api/events/stream');
+
+  es.onopen = () => {
+    _sseConnected = true;
+    label.textContent = 'Live';
+  };
+
+  es.onmessage = (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      if (payload.type === 'update') applyUpdate(payload);
+    } catch (_) {}
+  };
+
+  es.onerror = () => {
+    _sseConnected = false;
+    label.textContent = 'Reconnecting…';
+    es.close();
+    // Reconnect after 3 s
+    setTimeout(connectSSE, 3000);
+  };
+}
+
+// ── FALLBACK POLLING (rules panel only — rules rarely change) ─────────────
+
+async function refresh() {
+  // Lightweight fallback: only used if SSE fails.  Fetches status+alerts+stats
+  // via regular HTTP so the dashboard stays usable even without SSE.
+  if (_sseConnected) return;
+  const [sR, aR, stR] = await Promise.all([
+    fetch('/api/status').catch(() => null),
+    fetch('/api/alerts').catch(() => null),
+    fetch('/api/stats').catch(() => null),
+  ]);
+  const status = sR?.ok ? await sR.json() : null;
+  const alerts = aR?.ok ? await aR.json() : null;
+  const stats  = stR?.ok ? await stR.json() : null;
+  applyUpdate({
+    status: status || undefined,
+    alerts: alerts?.alerts || undefined,
+    stats:  stats  || undefined,
+  });
+}
+
+async function init() {
+  initCharts();
+  await fetchRules();
+
+  // Kick off the SSE connection — this is the primary real-time channel
+  connectSSE();
+
+  // Fallback polling at 2 s (only fires if SSE is down)
+  setInterval(refresh, 2000);
+
+  // Reload the static rules list every 30 s
+  setInterval(fetchRules, 30000);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

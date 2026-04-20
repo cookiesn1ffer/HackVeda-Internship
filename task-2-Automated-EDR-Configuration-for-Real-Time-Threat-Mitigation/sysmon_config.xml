@@ -1,0 +1,508 @@
+<!--
+  ╔══════════════════════════════════════════════════════════════════════════════╗
+  ║           CUSTOM EDR PROJECT — SYSMON CONFIGURATION                        ║
+  ║           Optimized for: Single-machine lab, detection research             ║
+  ║           Based on: SwiftOnSecurity + Olaf Hartong configs, customized      ║
+  ║                                                                              ║
+  ║  INSTALL:  Sysmon64.exe -accepteula -i sysmon_config.xml -n -l             ║
+  ║  UPDATE:   Sysmon64.exe -c sysmon_config.xml                               ║
+  ║  UNINSTALL: Sysmon64.exe -u force                                           ║
+  ╚══════════════════════════════════════════════════════════════════════════════╝
+
+  DESIGN PHILOSOPHY:
+  - Capture everything attackers rely on (process injection, persistence, C2)
+  - Exclude known-good noisy processes to reduce false positives
+  - Comment every rule so you understand WHY it's there
+  - Rules are ordered: specific exclusions first, then broad inclusions
+-->
+
+<Sysmon schemaversion="4.91">
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       HASH CONFIGURATION
+       MD5 is fast; SHA256 is definitive for threat intel lookups.
+       Use both so you can match against VirusTotal and local threat feeds.
+       ════════════════════════════════════════════════════════════════════ -->
+  <HashAlgorithms>md5,sha256,imphash</HashAlgorithms>
+
+  <!-- Check revocation status of signed binaries -->
+  <CheckRevocation>True</CheckRevocation>
+
+  <!-- Enable DNS logging (requires Sysmon 10+) -->
+  <DnsLookup>True</DnsLookup>
+
+  <EventFiltering>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         EVENT ID 1 — PROCESS CREATION
+         The most valuable event. Captures every new process with its
+         full command line, parent, user context, and hashes.
+         ════════════════════════════════════════════════════════════════ -->
+    <RuleGroup name="ProcessCreate" groupRelation="or">
+      <ProcessCreate onmatch="exclude">
+
+        <!-- === SYSTEM NOISE EXCLUSIONS === -->
+        <!-- Windows Defender / antivirus scanners -->
+        <Image condition="contains">MsMpEng.exe</Image>
+        <Image condition="contains">MpCmdRun.exe</Image>
+        <Image condition="contains">\Windows Defender\</Image>
+
+        <!-- Windows Update mechanisms — extremely noisy, low value -->
+        <Image condition="contains">TiWorker.exe</Image>
+        <Image condition="contains">wuauclt.exe</Image>
+        <Image condition="contains">UsoClient.exe</Image>
+        <Image condition="contains">WaasMedicAgent.exe</Image>
+
+        <!-- Common system maintenance processes -->
+        <Image condition="contains">backgroundTaskHost.exe</Image>
+        <Image condition="contains">SearchIndexer.exe</Image>
+        <Image condition="contains">SearchProtocolHost.exe</Image>
+        <Image condition="contains">SearchFilterHost.exe</Image>
+
+        <!-- Font cache — spawns constantly, zero security value -->
+        <Image condition="ends with">fontdrvhost.exe</Image>
+
+        <!-- VMware/VirtualBox tools (if running in a VM) -->
+        <Image condition="contains">vmtoolsd.exe</Image>
+        <Image condition="contains">vmwaretray.exe</Image>
+        <Image condition="contains">VBoxService.exe</Image>
+        <Image condition="contains">VBoxTray.exe</Image>
+
+        <!-- Google Chrome/Edge updaters — noisy, not malicious by themselves -->
+        <!-- CAUTION: Remove these if you want to catch browser-spawn attacks -->
+        <Image condition="contains">GoogleUpdate.exe</Image>
+        <Image condition="contains">MicrosoftEdgeUpdate.exe</Image>
+
+      </ProcessCreate>
+    </RuleGroup>
+
+    <!-- IMPORTANT: We log ALL process creation not excluded above.
+         This gives maximum visibility. In a production env you'd add
+         more exclusions, but in a lab — capture everything. -->
+    <RuleGroup name="ProcessCreate_CatchAll" groupRelation="or">
+      <ProcessCreate onmatch="include">
+        <Image condition="is not">-</Image>  <!-- Match everything -->
+      </ProcessCreate>
+    </RuleGroup>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         EVENT ID 2 — FILE CREATION TIME CHANGED (TIMESTOMPING)
+         Attackers change file timestamps to blend in with legitimate files.
+         Only a few tools legitimately do this — so we include broadly.
+         ════════════════════════════════════════════════════════════════ -->
+    <RuleGroup name="FileCreateTime" groupRelation="or">
+      <FileCreateTime onmatch="include">
+
+        <!-- Any timestamp change on executable files is suspicious -->
+        <TargetFilename condition="ends with">.exe</TargetFilename>
+        <TargetFilename condition="ends with">.dll</TargetFilename>
+        <TargetFilename condition="ends with">.bat</TargetFilename>
+        <TargetFilename condition="ends with">.ps1</TargetFilename>
+        <TargetFilename condition="ends with">.vbs</TargetFilename>
+        <TargetFilename condition="ends with">.hta</TargetFilename>
+        <TargetFilename condition="ends with">.lnk</TargetFilename>
+
+      </FileCreateTime>
+    </RuleGroup>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         EVENT ID 3 — NETWORK CONNECTION
+         Critical for catching reverse shells, C2 beaconing, and data
+         exfiltration. We focus on interesting processes making outbound
+         connections, not routine system traffic.
+         ════════════════════════════════════════════════════════════════ -->
+    <RuleGroup name="NetworkConnect" groupRelation="or">
+      <NetworkConnect onmatch="exclude">
+
+        <!-- === SYSTEM NOISE EXCLUSIONS === -->
+        <!-- Windows Update -->
+        <Image condition="contains">svchost.exe</Image>
+        <!-- NOTE: svchost IS used by malware (DLL injection) but the volume
+             of legitimate svchost traffic makes it too noisy to log all of it.
+             We rely on Event ID 8 (RemoteThread) to catch svchost injection. -->
+
+        <!-- Windows Defender cloud lookups -->
+        <Image condition="contains">MsMpEng.exe</Image>
+        <Image condition="contains">MpCmdRun.exe</Image>
+
+        <!-- DNS client service -->
+        <Image condition="ends with">dns.exe</Image>
+
+        <!-- System idle / system process -->
+        <Image condition="is">System</Image>
+
+        <!-- Browser connections (very noisy — comment out if you want to monitor browser traffic) -->
+        <!-- <Image condition="contains">chrome.exe</Image> -->
+        <!-- <Image condition="contains">msedge.exe</Image> -->
+        <!-- <Image condition="contains">firefox.exe</Image> -->
+
+      </NetworkConnect>
+    </RuleGroup>
+
+    <RuleGroup name="NetworkConnect_Suspicious" groupRelation="or">
+      <NetworkConnect onmatch="include">
+
+        <!-- PowerShell making network connections — HIGH PRIORITY -->
+        <Image condition="ends with">powershell.exe</Image>
+        <Image condition="ends with">pwsh.exe</Image>
+
+        <!-- CMD spawning network connections (rare in legitimate use) -->
+        <Image condition="ends with">cmd.exe</Image>
+
+        <!-- Script interpreters -->
+        <Image condition="ends with">wscript.exe</Image>
+        <Image condition="ends with">cscript.exe</Image>
+        <Image condition="ends with">mshta.exe</Image>
+
+        <!-- Office spawning network connections (phishing/macro dropper) -->
+        <Image condition="ends with">winword.exe</Image>
+        <Image condition="ends with">excel.exe</Image>
+        <Image condition="ends with">powerpnt.exe</Image>
+        <Image condition="ends with">outlook.exe</Image>
+
+        <!-- LOLBins making network connections — almost always malicious -->
+        <Image condition="ends with">certutil.exe</Image>
+        <Image condition="ends with">bitsadmin.exe</Image>
+        <Image condition="ends with">regsvr32.exe</Image>
+        <Image condition="ends with">rundll32.exe</Image>
+        <Image condition="ends with">msiexec.exe</Image>
+        <Image condition="ends with">installutil.exe</Image>
+        <Image condition="ends with">cmstp.exe</Image>
+
+        <!-- Remote management tools (could be legitimate or lateral movement) -->
+        <Image condition="ends with">wmic.exe</Image>
+        <Image condition="ends with">psexec.exe</Image>
+        <Image condition="ends with">psexesvc.exe</Image>
+
+        <!-- Connections to unusual ports from any process -->
+        <DestinationPort condition="is">4444</DestinationPort>   <!-- Metasploit default -->
+        <DestinationPort condition="is">1234</DestinationPort>   <!-- Common test shell port -->
+        <DestinationPort condition="is">9001</DestinationPort>   <!-- Tor/common C2 -->
+        <DestinationPort condition="is">9002</DestinationPort>
+        <DestinationPort condition="is">6666</DestinationPort>
+        <DestinationPort condition="is">6667</DestinationPort>   <!-- IRC (old C2 method) -->
+        <DestinationPort condition="is">1337</DestinationPort>
+
+      </NetworkConnect>
+    </RuleGroup>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         EVENT ID 5 — PROCESS TERMINATED
+         Useful for correlating with process creation (lifespan analysis).
+         Short-lived processes that touch sensitive resources = suspicious.
+         Log selectively to avoid noise.
+         ════════════════════════════════════════════════════════════════ -->
+    <RuleGroup name="ProcessTerminate" groupRelation="or">
+      <ProcessTerminate onmatch="include">
+        <!-- Track when security tools die — could indicate tampering -->
+        <Image condition="contains">Sysmon</Image>
+        <Image condition="contains">velociraptor</Image>
+        <Image condition="contains">MsMpEng</Image>
+      </ProcessTerminate>
+    </RuleGroup>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         EVENT ID 6 — DRIVER LOADED
+         Rootkits and kernel implants load drivers. Any unsigned driver
+         or driver from a temp/unusual path is a major red flag.
+         ════════════════════════════════════════════════════════════════ -->
+    <RuleGroup name="DriverLoad" groupRelation="or">
+      <DriverLoad onmatch="include">
+        <!-- Unsigned drivers — almost always a problem -->
+        <Signature condition="is">false</Signature>
+
+        <!-- Drivers from temp or user-writable paths -->
+        <ImageLoaded condition="contains">\Temp\</ImageLoaded>
+        <ImageLoaded condition="contains">\AppData\</ImageLoaded>
+        <ImageLoaded condition="contains">\Downloads\</ImageLoaded>
+        <ImageLoaded condition="contains">\Users\Public\</ImageLoaded>
+
+      </DriverLoad>
+    </RuleGroup>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         EVENT ID 7 — IMAGE LOADED (DLL)
+         DLL hijacking, side-loading, and injection all show here.
+         Very noisy — be selective. Focus on known-bad paths and
+         DLLs loaded by suspicious processes.
+         ════════════════════════════════════════════════════════════════ -->
+    <RuleGroup name="ImageLoad" groupRelation="or">
+      <ImageLoad onmatch="include">
+
+        <!-- DLLs loaded from suspicious locations -->
+        <ImageLoaded condition="contains">\Temp\</ImageLoaded>
+        <ImageLoaded condition="contains">\AppData\Local\Temp\</ImageLoaded>
+        <ImageLoaded condition="contains">\Downloads\</ImageLoaded>
+        <ImageLoaded condition="contains">\Users\Public\</ImageLoaded>
+
+        <!-- Credential-related DLLs loaded by unexpected processes -->
+        <ImageLoaded condition="ends with">wce.dll</ImageLoaded>
+        <ImageLoaded condition="ends with">mimikatz</ImageLoaded>
+
+        <!-- Known attack tool DLLs -->
+        <ImageLoaded condition="contains">meterpreter</ImageLoaded>
+        <ImageLoaded condition="contains">beacon</ImageLoaded>
+
+      </ImageLoad>
+    </RuleGroup>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         EVENT ID 8 — CREATE REMOTE THREAD
+         Process injection technique. Legitimate software RARELY does this.
+         Malware injects into legitimate processes to hide activity.
+         ════════════════════════════════════════════════════════════════ -->
+    <RuleGroup name="CreateRemoteThread" groupRelation="or">
+      <CreateRemoteThread onmatch="exclude">
+        <!-- Known-legitimate injection (very few) -->
+        <!-- AV products sometimes inject into processes for hooking -->
+        <SourceImage condition="contains">MsMpEng.exe</SourceImage>
+      </CreateRemoteThread>
+    </RuleGroup>
+
+    <!-- Catch ALL remote thread creation not excluded -->
+    <RuleGroup name="CreateRemoteThread_CatchAll" groupRelation="or">
+      <CreateRemoteThread onmatch="include">
+        <SourceImage condition="is not">-</SourceImage>
+      </CreateRemoteThread>
+    </RuleGroup>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         EVENT ID 10 — PROCESS ACCESS
+         Credential dumping tools (Mimikatz, ProcDump) read LSASS memory.
+         This catches them by monitoring what accesses LSASS.
+         ════════════════════════════════════════════════════════════════ -->
+    <RuleGroup name="ProcessAccess" groupRelation="or">
+      <ProcessAccess onmatch="include">
+
+        <!-- LSASS access — the #1 credential dumping target -->
+        <TargetImage condition="ends with">lsass.exe</TargetImage>
+
+        <!-- WinLogon — also targeted for credential access -->
+        <TargetImage condition="ends with">winlogon.exe</TargetImage>
+
+        <!-- Any process accessing another with PROCESS_VM_READ + PROCESS_QUERY_INFO
+             (the flags Mimikatz uses) will be captured by the above rules -->
+
+      </ProcessAccess>
+    </RuleGroup>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         EVENT ID 11 — FILE CREATED
+         Dropper activity, webshells, and staged payloads appear here.
+         Focus on high-value paths where malware likes to land.
+         ════════════════════════════════════════════════════════════════ -->
+    <RuleGroup name="FileCreate" groupRelation="or">
+      <FileCreate onmatch="include">
+
+        <!-- Executables/scripts dropped to temp paths -->
+        <TargetFilename condition="contains">\Temp\</TargetFilename>
+        <TargetFilename condition="contains">\AppData\Local\Temp\</TargetFilename>
+        <TargetFilename condition="contains">\AppData\Roaming\</TargetFilename>
+
+        <!-- Executables anywhere by file type -->
+        <TargetFilename condition="ends with">.exe</TargetFilename>
+        <TargetFilename condition="ends with">.dll</TargetFilename>
+        <TargetFilename condition="ends with">.bat</TargetFilename>
+        <TargetFilename condition="ends with">.ps1</TargetFilename>
+        <TargetFilename condition="ends with">.vbs</TargetFilename>
+        <TargetFilename condition="ends with">.hta</TargetFilename>
+        <TargetFilename condition="ends with">.js</TargetFilename>
+        <TargetFilename condition="ends with">.lnk</TargetFilename>
+        <TargetFilename condition="ends with">.inf</TargetFilename>
+
+        <!-- Webshells in common IIS/web root paths -->
+        <TargetFilename condition="contains">inetpub\wwwroot</TargetFilename>
+
+        <!-- Startup/Autorun locations -->
+        <TargetFilename condition="contains">Start Menu\Programs\Startup</TargetFilename>
+
+      </FileCreate>
+    </RuleGroup>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         EVENT IDs 12, 13, 14 — REGISTRY EVENTS
+         Registry persistence (Run keys), COM hijacking, SAM/LSA access.
+         These are the bread and butter of persistence detection.
+         ════════════════════════════════════════════════════════════════ -->
+    <RuleGroup name="RegistryEvent" groupRelation="or">
+      <RegistryEvent onmatch="include">
+
+        <!-- ═══ PERSISTENCE: RUN KEYS ═══ -->
+        <TargetObject condition="contains">SOFTWARE\Microsoft\Windows\CurrentVersion\Run</TargetObject>
+        <TargetObject condition="contains">SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce</TargetObject>
+        <TargetObject condition="contains">SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run</TargetObject>
+        <TargetObject condition="contains">HKCU\Software\Microsoft\Windows\CurrentVersion\Run</TargetObject>
+
+        <!-- ═══ PERSISTENCE: SERVICES ═══ -->
+        <TargetObject condition="contains">SYSTEM\CurrentControlSet\Services</TargetObject>
+
+        <!-- ═══ PERSISTENCE: SCHEDULED TASKS (registry-based) ═══ -->
+        <TargetObject condition="contains">SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tasks</TargetObject>
+
+        <!-- ═══ PERSISTENCE: LOGON/WINLOGON ═══ -->
+        <TargetObject condition="contains">SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon</TargetObject>
+
+        <!-- ═══ PERSISTENCE: COM HIJACKING ═══ -->
+        <TargetObject condition="contains">CLSID</TargetObject>
+
+        <!-- ═══ CREDENTIAL ACCESS: LSA secrets ═══ -->
+        <TargetObject condition="contains">SYSTEM\CurrentControlSet\Control\Lsa</TargetObject>
+        <TargetObject condition="contains">SAM\SAM\Domains\Account</TargetObject>
+
+        <!-- ═══ DEFENSE EVASION: Disabling security tools ═══ -->
+        <TargetObject condition="contains">SOFTWARE\Policies\Microsoft\Windows Defender</TargetObject>
+        <TargetObject condition="contains">SOFTWARE\Microsoft\Windows Defender</TargetObject>
+        <TargetObject condition="contains">SYSTEM\CurrentControlSet\Services\WinDefend</TargetObject>
+
+        <!-- ═══ DEFENSE EVASION: Disabling Windows Firewall ═══ -->
+        <TargetObject condition="contains">SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy</TargetObject>
+
+        <!-- ═══ EXECUTION: AppInit DLLs (classic injection vector) ═══ -->
+        <TargetObject condition="contains">SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows\AppInit_DLLs</TargetObject>
+
+        <!-- ═══ EXECUTION: Image File Execution Options (IFEO) Debugger hijack ═══ -->
+        <TargetObject condition="contains">SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options</TargetObject>
+
+        <!-- ═══ EXECUTION: PowerShell script block logging ═══ -->
+        <TargetObject condition="contains">SOFTWARE\Policies\Microsoft\Windows\PowerShell</TargetObject>
+
+      </RegistryEvent>
+    </RuleGroup>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         EVENT ID 15 — FILE STREAM CREATED (Alternate Data Streams)
+         ADS = data hidden inside an NTFS file stream.
+         Attackers hide payloads here. Legitimate use is extremely rare.
+         ════════════════════════════════════════════════════════════════ -->
+    <RuleGroup name="FileCreateStreamHash" groupRelation="or">
+      <FileCreateStreamHash onmatch="include">
+        <!-- Zone.Identifier is legitimate (marks downloaded files)
+             but executables with zone ID AND another stream = suspicious -->
+        <TargetFilename condition="ends with">.exe</TargetFilename>
+        <TargetFilename condition="ends with">.dll</TargetFilename>
+        <TargetFilename condition="ends with">.ps1</TargetFilename>
+        <TargetFilename condition="ends with">.bat</TargetFilename>
+        <TargetFilename condition="ends with">.vbs</TargetFilename>
+      </FileCreateStreamHash>
+    </RuleGroup>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         EVENT IDs 17 & 18 — PIPE CREATED / PIPE CONNECTED
+         Named pipes are used heavily by:
+         - PsExec (lateral movement)
+         - Cobalt Strike beacon (C2 communication)
+         - Metasploit (stage 2 delivery)
+         ════════════════════════════════════════════════════════════════ -->
+    <RuleGroup name="PipeEvent" groupRelation="or">
+      <PipeEvent onmatch="include">
+
+        <!-- Cobalt Strike default pipe names -->
+        <PipeName condition="contains">mojo</PipeName>
+        <PipeName condition="contains">msagent_</PipeName>
+        <PipeName condition="begins with">\postex_</PipeName>
+        <PipeName condition="begins with">\status_</PipeName>
+        <PipeName condition="begins with">\MSSE-</PipeName>
+        <PipeName condition="begins with">\spoolss_</PipeName>
+        <PipeName condition="begins with">\win_svc</PipeName>
+        <PipeName condition="begins with">\ntsvcs</PipeName>
+        <PipeName condition="begins with">\DserNamePipe</PipeName>
+        <PipeName condition="begins with">\SearchTextHarvester</PipeName>
+
+        <!-- Metasploit Meterpreter pipe names -->
+        <PipeName condition="contains">meterpreter</PipeName>
+
+        <!-- PsExec pipes -->
+        <PipeName condition="begins with">\PSEXESVC</PipeName>
+        <PipeName condition="contains">psexec</PipeName>
+
+        <!-- Generic suspicious short pipe names -->
+        <PipeName condition="begins with">\46</PipeName>
+
+      </PipeEvent>
+    </RuleGroup>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         EVENT IDs 19, 20, 21 — WMI EVENTS
+         WMI persistence is nearly invisible to defenders who don't look for it.
+         Attackers use WMI subscriptions to survive reboots.
+         ════════════════════════════════════════════════════════════════ -->
+    <RuleGroup name="WmiEvent" groupRelation="or">
+      <WmiEvent onmatch="include">
+        <!-- Capture ALL WMI event subscription activity -->
+        <Operation condition="is not">-</Operation>
+      </WmiEvent>
+    </RuleGroup>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         EVENT ID 22 — DNS QUERY
+         C2 over DNS, domain generation algorithm (DGA) detection,
+         and DNS tunneling all appear here.
+         ════════════════════════════════════════════════════════════════ -->
+    <RuleGroup name="DnsQuery" groupRelation="or">
+      <DnsQuery onmatch="exclude">
+        <!-- Exclude very common, definitely-legitimate domains -->
+        <!-- Only add these if DNS noise is overwhelming your lab -->
+        <!-- <QueryName condition="end with">.microsoft.com</QueryName> -->
+        <!-- <QueryName condition="end with">.windows.com</QueryName> -->
+      </DnsQuery>
+    </RuleGroup>
+
+    <!-- Capture ALL DNS queries not excluded -->
+    <RuleGroup name="DnsQuery_CatchAll" groupRelation="or">
+      <DnsQuery onmatch="include">
+        <QueryName condition="is not">-</QueryName>
+      </DnsQuery>
+    </RuleGroup>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         EVENT ID 23 — FILE DELETED
+         Evidence destruction. Attackers delete their tools and logs.
+         Also useful for ransomware detection (mass file deletion).
+         ════════════════════════════════════════════════════════════════ -->
+    <RuleGroup name="FileDelete" groupRelation="or">
+      <FileDelete onmatch="include">
+
+        <!-- Executables and scripts being deleted from sensitive paths -->
+        <TargetFilename condition="contains">\Temp\</TargetFilename>
+        <TargetFilename condition="ends with">.ps1</TargetFilename>
+        <TargetFilename condition="ends with">.bat</TargetFilename>
+        <TargetFilename condition="ends with">.vbs</TargetFilename>
+        <TargetFilename condition="ends with">.exe</TargetFilename>
+
+        <!-- Windows event log deletion — major red flag -->
+        <TargetFilename condition="contains">\Windows\System32\winevt\Logs\</TargetFilename>
+
+      </FileDelete>
+    </RuleGroup>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         EVENT ID 25 — PROCESS TAMPERING
+         Detects process hollowing, process doppelgänging, and
+         process herpaderping — all used to run malcode inside
+         a legitimate-looking process.
+         ════════════════════════════════════════════════════════════════ -->
+    <RuleGroup name="ProcessTampering" groupRelation="or">
+      <ProcessTampering onmatch="include">
+        <!-- Capture ALL process tampering -->
+        <Image condition="is not">-</Image>
+      </ProcessTampering>
+    </RuleGroup>
+
+  </EventFiltering>
+
+</Sysmon>

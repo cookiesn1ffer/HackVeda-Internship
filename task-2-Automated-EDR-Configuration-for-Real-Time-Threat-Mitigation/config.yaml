@@ -1,0 +1,159 @@
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║         CUSTOM EDR — MAIN CONFIGURATION FILE                    ║
+# ║  Edit this file to tune your EDR without touching code.         ║
+# ╚══════════════════════════════════════════════════════════════════╝
+
+# ─── ENGINE SETTINGS ─────────────────────────────────────────────────────────
+engine:
+  # How often to poll the event log for new events (seconds)
+  poll_interval_seconds: 2
+
+  # Maximum events to process per poll cycle (prevents overload on startup)
+  max_events_per_cycle: 200
+
+  # How far back to look on first start (seconds). 300 = last 5 minutes.
+  lookback_seconds: 300
+
+  # Enable automated response actions (set to false for monitor-only mode)
+  # NOTE: Keep false during simulations — auto-kill can terminate the simulation
+  #       runner itself (e.g. on CRITICAL IFEO alerts), cutting steps short.
+  #       Set to true only in production / on real endpoints.
+  auto_response_enabled: false
+
+  # Minimum severity to trigger automated response (1=Low, 5=Medium, 8=High, 10=Critical)
+  auto_response_min_severity: 7
+
+  # Minimum severity to fire an alert (Discord/console). Set to 1 for everything.
+  alert_min_severity: 3
+
+# ─── VELOCIRAPTOR API ─────────────────────────────────────────────────────────
+velociraptor:
+  # Velociraptor server address
+  server_url: "https://localhost:8889"
+
+  # API credentials (set after running: velociraptor config api_client)
+  api_key_file: ""              # ← Set after Velociraptor setup (optional)
+
+  # Skip TLS verification for self-signed certs (lab only!)
+  verify_tls: false
+
+  # Username/password fallback (if API key not set up yet)
+  username: "admin"
+  password: ""                   # ← Set your Velociraptor password here
+
+  # Organization ID (leave as empty string for default)
+  org_id: ""
+
+# ─── ALERTING ────────────────────────────────────────────────────────────────
+alerting:
+  # Discord webhook URL for alerts (create at discordapp.com/developers)
+  # Format: https://discord.com/api/webhooks/YOUR_ID/YOUR_TOKEN
+  discord_webhook_url: ""   # ← Paste your Discord webhook URL here
+
+  # Enable rich console (colored terminal output)
+  console_alerts: true
+
+  # Send alerts to a local log file as well
+  log_file_alerts: true
+
+# ─── LOGGING ─────────────────────────────────────────────────────────────────
+logging:
+  # Directory for alert logs (relative to project root, auto-created)
+  alerts_dir: "logs\\alerts"
+
+  # Directory for incident JSON logs
+  incidents_dir: "logs\\incidents"
+
+  # Directory for raw event logs
+  raw_events_dir: "logs\\raw"
+
+  # Log level: DEBUG, INFO, WARNING, ERROR
+  level: "INFO"
+
+  # Rotate log files daily
+  rotate_daily: true
+
+# ─── RESPONSE ACTIONS ────────────────────────────────────────────────────────
+response:
+  # Kill the offending process
+  kill_process: true
+
+  # Add Windows Firewall rule to block the process's outbound traffic
+  firewall_block: true
+
+  # Isolate the endpoint (blocks ALL outbound except EDR/Velociraptor traffic)
+  # WARNING: This will cut you off from the network! Use with caution.
+  network_isolate: false
+
+  # Whitelist — these processes will NEVER be killed or blocked
+  # (Add your legitimate tools here to avoid false positive disruption)
+  process_whitelist:
+    - "C:\\Windows\\System32\\svchost.exe"
+    - "C:\\Windows\\System32\\lsass.exe"
+    - "C:\\Windows\\System32\\csrss.exe"
+    - "C:\\Windows\\System32\\wininit.exe"
+    - "C:\\Windows\\System32\\services.exe"
+    # Keep shell interpreters alive so simulations run to completion
+    - "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+    - "C:\\Windows\\System32\\cmd.exe"
+
+# ─── DETECTION TUNING ────────────────────────────────────────────────────────
+detection:
+  # Deduplication window — don't fire the same alert twice within N seconds
+  dedup_window_seconds: 60
+
+  # Suspicious ports to flag on any outbound connection
+  suspicious_ports:
+    - 4444   # Metasploit default
+    - 1234   # Common test shell
+    - 9001   # Common C2
+    - 9002
+    - 6666
+    - 6667   # IRC C2
+    - 1337
+    - 31337  # Elite
+    - 8888   # Jupyter/common C2
+    - 2222   # Alt SSH
+
+  # Parent-child process pairs that are almost always malicious
+  suspicious_parent_child:
+    - parent: "winword.exe"
+      child: "cmd.exe"
+    - parent: "winword.exe"
+      child: "powershell.exe"
+    - parent: "excel.exe"
+      child: "cmd.exe"
+    - parent: "excel.exe"
+      child: "powershell.exe"
+    - parent: "outlook.exe"
+      child: "cmd.exe"
+    - parent: "outlook.exe"
+      child: "powershell.exe"
+    - parent: "powershell.exe"
+      child: "cmd.exe"
+    - parent: "mshta.exe"
+      child: "powershell.exe"
+    - parent: "wscript.exe"
+      child: "powershell.exe"
+    - parent: "cscript.exe"
+      child: "powershell.exe"
+
+  # Processes that should never make outbound network connections
+  no_network_processes:
+    - "notepad.exe"
+    - "calc.exe"
+    - "mspaint.exe"
+    - "wordpad.exe"
+
+# ─── DASHBOARD ───────────────────────────────────────────────────────────────
+dashboard:
+  # Flask web dashboard settings
+  enabled: true
+  host: "127.0.0.1"
+  port: 5000
+
+  # How many incidents to show in the dashboard
+  max_incidents_shown: 100
+
+  # Auto-refresh interval (seconds)
+  refresh_interval: 5
