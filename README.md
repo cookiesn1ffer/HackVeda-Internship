@@ -1,39 +1,58 @@
 # HackVeda Internship
 
-This repository documents my journey during my internship at HackVeda, where I worked on practical IT and cybersecurity concepts.
+This repository documents my cybersecurity internship at HackVeda, covering hands-on labs, detection engineering, and threat simulation projects.
 
-## About
+---
 
-This repository serves as both a learning journal and a reference for anyone interested in cybersecurity.
+## Tasks
 
-## Contents
+### Task 1 — SIEM Threat Alerts with Wazuh
+**Folder:** `task-1-siem-threat-alerts/`
 
-* Daily and weekly notes
-* Hands-on labs and experiments
-* Commands, scripts, and configurations
-* Explanations of key security concepts
+Set up a full SIEM pipeline using Wazuh on a Ubuntu VM (VirtualBox), enrolled a Windows endpoint as an agent, enabled audit logging, simulated brute-force attacks, and monitored real-time alerts in the Wazuh dashboard.
 
-## Goal
+**Key skills:** VirtualBox, Wazuh, Windows Agent enrollment, audit policy, attack simulation, log analysis.
 
-The goal of this repository is to build a strong foundation in cybersecurity while documenting my learning process in a structured way.
+---
 
-## Why This Repository
+### Task 2 — Automated EDR Configuration for Real-Time Threat Mitigation
+**Folder:** `task-2-Automated-EDR-Configuration-for-Real-Time-Threat-Mitigation/`
 
-This repository can be useful for:
+Built a fully custom Endpoint Detection and Response (EDR) system in Python that ingests Sysmon events from the Windows Event Log in real time, evaluates them against 20+ MITRE ATT&CK-mapped detection rules, triggers automated responses (process kill, firewall block), and pushes live alerts to a web dashboard and Discord.
 
-* Beginners starting in cybersecurity
-* Learners looking for structured notes
-* Anyone interested in practical, hands-on understanding
+**Stack:** Python, Sysmon, Velociraptor, Flask, Server-Sent Events, Discord Webhooks, Win32 API.
+
+**Detection categories:** Execution, Persistence, Privilege Escalation, Defense Evasion, Credential Access, Discovery, Lateral Movement, Command & Control.
+
+---
 
 ## Repository Structure
 
 ```
 HackVeda-Internship/
 ├── task-1-siem-threat-alerts/
-│   └── README.md
+│   └── README.md                   ← Full SIEM lab walkthrough
+│
+├── task-2-Automated-EDR-Configuration-for-Real-Time-Threat-Mitigation/
+│   ├── detection_engine/           ← Core EDR engine (rules, parser, alerting)
+│   │   └── rules/                  ← 20+ MITRE-mapped detection rules
+│   ├── dashboard/                  ← Flask real-time web dashboard (SSE)
+│   ├── test_scenarios/             ← PowerShell attack simulations
+│   ├── Sysmon/                     ← Sysmon setup instructions
+│   ├── config.yaml                 ← Main configuration file
+│   ├── sysmon_config.xml           ← Sysmon event capture config
+│   ├── CustomEDR.Sysmon.Events.yaml← Velociraptor artifact definition
+│   ├── run_edr.py                  ← Production entry point
+│   ├── run_demo.py                 ← Demo/dry-run mode
+│   └── requirements.txt
+│
 └── README.md
 ```
 
-## Contributions
+---
 
-Feel free to explore, fork, or suggest improvements.
+## About
+
+This repository serves as both a practical portfolio and a reference for anyone interested in defensive security engineering — from SIEM setup to custom EDR development.
+
+Useful for learners interested in: threat detection, Windows event log analysis, MITRE ATT&CK, Python security tooling, and automated incident response.
