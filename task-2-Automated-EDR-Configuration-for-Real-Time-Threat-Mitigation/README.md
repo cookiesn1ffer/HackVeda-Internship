@@ -19,7 +19,7 @@ Sysmon (kernel) → log_reader.py → detection engine → response + alerts →
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Windows Kernel                           │
-│   Process Create · Network Connect · Registry · DNS · etc.     │
+│   Process Create · Network Connect · Registry · DNS · etc.      │
 └─────────────────────────┬───────────────────────────────────────┘
                           │  Event IDs 1,3,5,8,10,11,12,13,14,22,25
                           ▼
@@ -31,20 +31,20 @@ Sysmon (kernel) → log_reader.py → detection engine → response + alerts →
                           ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │              log_reader.py  (event pipeline)                    │
-│   EvtQuery/EvtRender  →  wevtutil  →  ReadEventLog fallback    │
+│   EvtQuery/EvtRender  →  wevtutil  →  ReadEventLog fallback     │
 │   Normalises raw XML into typed Python dataclasses              │
 └─────────────────────────┬───────────────────────────────────────┘
                           │  BaseEvent subclasses
                           ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │            detection engine  (engine.py + rules/)               │
-│                                                                  │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────┐ │
-│  │ PS001-06 │ │ NET001-05│ │ PER001-07│ │CRED001-05│ │INJ   │ │
-│  │PowerShell│ │ Network  │ │Persistence│ │Credential│ │001-05│ │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────┘ │
-│                                                                  │
-│   Deduplication cache  ·  Severity scoring  ·  MITRE mapping   │
+│                                                                 │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  ┌──────┐  │
+│  │ PS001-06 │ │ NET001-05│ │ PER001-07│ │CRED001-05│  │ INJ  │  │
+│  │PowerShell│ │ Network  │ │Persistence│ │Credential│ │001-05│  │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘  └──────┘  │
+│                                                                 │
+│   Deduplication cache  ·  Severity scoring  ·  MITRE mapping    │
 └────────────┬────────────────────────┬───────────────────────────┘
              │                        │
              ▼                        ▼
@@ -56,7 +56,7 @@ Sysmon (kernel) → log_reader.py → detection engine → response + alerts →
 └────────────────────┘                       │
                                              ▼
                               ┌──────────────────────────┐
-                              │   Flask dashboard         │
+                              │   Flask dashboard        │
                               │   http://127.0.0.1:5000  │
                               │                          │
                               │  Events · Alerts · MITRE │
